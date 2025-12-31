@@ -5,7 +5,7 @@ pub const PAGE_SIZE_BITS: usize = 0xc; // 4KB = 2^12 Bytes
 
 pub const USER_STACK_SIZE: usize = PAGE_SIZE * 0x40; // 256KB
 pub const KERNEL_STACK_SIZE: usize = PAGE_SIZE * 0x40; // 256KB
-// INFO: 暂时定位 16 MB 大小的内核堆
+                                                       // INFO: 暂时定位 16 MB 大小的内核堆
 pub const KERNEL_HEAP_SIZE: usize = PAGE_SIZE * 0x4000; // 16MB
 
 pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;

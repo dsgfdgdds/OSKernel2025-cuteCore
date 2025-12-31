@@ -1,23 +1,29 @@
 pub mod arch;
 mod platform;
 
-pub use arch::{bootstrap_init, machine_init};
-pub use arch::{console_putchar, console_getchar, console_flush, shutdown};
-pub use arch::{get_time, get_clock_freq};
-pub use arch::{kstack_alloc};
-pub use arch::{USER_STACK_SIZE, KERNEL_HEAP_SIZE, KERNEL_STACK_SIZE, PAGE_SIZE, PAGE_SIZE_BITS, TRAMPOLINE, TRAP_CONTEXT_BASE, MEMORY_END};
-pub use arch::{PageTableImpl, PageTableEntryImpl, KernelStack};
+pub use arch::kstack_alloc;
 pub use arch::INTR_MASKING_INFO;
-pub use arch::{trap_return, trap_handler};
+pub use arch::{bootstrap_init, machine_init};
+pub use arch::{console_flush, console_getchar, console_putchar, shutdown};
+pub use arch::{get_clock_freq, get_time};
+pub use arch::{trap_handler, trap_return};
+pub use arch::{KernelStack, PageTableEntryImpl, PageTableImpl};
+pub use arch::{
+    KERNEL_HEAP_SIZE, KERNEL_STACK_SIZE, MEMORY_END, PAGE_SIZE, PAGE_SIZE_BITS, TRAMPOLINE,
+    TRAP_CONTEXT_BASE, USER_STACK_SIZE,
+};
 
 #[cfg(feature = "loongarch")]
-pub use arch::{HIGH_BASE_EIGHT,MEMORY_HIGH_BASE, MEMORY_HIGH_BASE_VPN, MEMORY_SIZE, PALEN, VA_MASK, VPN_SEG_MASK};
+pub use arch::{
+    HIGH_BASE_EIGHT, MEMORY_HIGH_BASE, MEMORY_HIGH_BASE_VPN, MEMORY_SIZE, PALEN, VA_MASK,
+    VPN_SEG_MASK,
+};
 
 #[cfg(feature = "board_laqemu")]
-pub use platform::{MMIO, MEM_SIZE};
+pub use platform::{MEM_SIZE, MMIO};
 
 #[cfg(feature = "board_rvqemu")]
-pub use platform::{MMIO, CLOCK_FREQ};
+pub use platform::{CLOCK_FREQ, MMIO};
 
-#[cfg(feature = "board_la2k1000")]
-pub use platform::{MMIO, MEM_SIZE};
+#[cfg(feature = "board_2k1000")]
+pub use platform::{MEM_SIZE, MMIO};

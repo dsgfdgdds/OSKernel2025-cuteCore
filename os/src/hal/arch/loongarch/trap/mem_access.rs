@@ -1,7 +1,7 @@
-use core::fmt::Debug;
-use bit_field::BitField;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 use super::context::GeneralRegs;
+use bit_field::BitField;
+use core::fmt::Debug;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[derive(Clone, Copy)]
 pub struct Instruction {

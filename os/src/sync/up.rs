@@ -1,6 +1,6 @@
+use crate::hal::INTR_MASKING_INFO;
 use core::cell::{RefCell, RefMut, UnsafeCell};
 use core::ops::{Deref, DerefMut};
-use crate::hal::INTR_MASKING_INFO;
 
 /*
 /// Wrap a static data structure inside it so that we are

@@ -1,7 +1,7 @@
+use crate::hal::PageTableEntryImpl;
+use crate::mm::{MapPermission, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use alloc::string::String;
 use alloc::vec::Vec;
-use crate::hal::PageTableEntryImpl;
-use crate::mm::{PhysPageNum, VirtAddr, VirtPageNum, PhysAddr, MapPermission};
 
 pub trait PageTable {
     fn new() -> Self;
@@ -32,7 +32,6 @@ pub trait PageTable {
 
     fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T;
 }
-
 
 pub struct UserBuffer {
     pub buffers: Vec<&'static mut [u8]>,

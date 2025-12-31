@@ -1,5 +1,5 @@
-use core::arch::asm;
 use super::config;
+use core::arch::asm;
 
 pub const TICKS_PER_SEC: usize = 100;
 
@@ -17,9 +17,7 @@ pub fn get_time() -> usize {
 
 #[inline]
 pub fn get_clock_freq() -> usize {
-    unsafe {
-        config::CLOCK_FREQ
-    }
+    unsafe { config::CLOCK_FREQ }
 }
 
 pub fn get_timer_freq_first_time() {

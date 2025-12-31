@@ -1,4 +1,3 @@
-
 pub struct MerrEra {
     bits: usize,
 }
@@ -26,7 +25,7 @@ pub fn read() -> MerrEra {
             let bits: usize;
             core::arch::asm!("csrrd {}, {}", out(reg) bits, const 0x94);
             bits
-        }
+        },
     }
 }
 

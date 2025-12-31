@@ -7,8 +7,6 @@ BOARD := 2k1000
 SBI ?=
 BOOTLOADER := ../bootloader/u-boot-with-spl.bin
 
-BOADR ?= laqemu
-
 OBJCOPY := loongarch64-linux-gnu-objcopy
 OBJDUMP := loongarch64-linux-gnu-objdump
 READELF := loongarch64-linux-gnu-readelf
@@ -26,6 +24,14 @@ kernel:
 	@echo Platform: $(BOARD), SBI: $(SBI)
 	@cp src/hal/arch/loongarch/linker-$(BOARD).ld src/hal/arch/loongarch/linker.ld
 	@LOG=${LOG} cargo build --${MODE} --target $(TARGET) --features "board_$(BOARD)"
+
+pre:
+	@rm .cargo/config.toml || true
+	@cp cargo/la-config.toml .cargo/config.toml
+
+clean:
+	@rm -f ../kernel-qemu
+	@rm -f src/hal/arch/loongarch/linker.ld
 
 run:
 	qemu-system-loongarch64 \

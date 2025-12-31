@@ -1,4 +1,4 @@
-use crate::hal::{PAGE_SIZE, PAGE_SIZE_BITS, PageTableEntryImpl};
+use crate::hal::{PageTableEntryImpl, PAGE_SIZE, PAGE_SIZE_BITS};
 use core::fmt::{self, Debug, Formatter};
 
 const PA_WIDTH_SV39: usize = 56;

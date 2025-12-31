@@ -1,5 +1,5 @@
 use crate::sync::UPIntrFreeCell;
-use crate::task::{TaskControlBlock, block_current_and_run_next, current_task, wakeup_task};
+use crate::task::{block_current_and_run_next, current_task, wakeup_task, TaskControlBlock};
 use alloc::{collections::VecDeque, sync::Arc};
 
 pub struct Semaphore {

@@ -1,7 +1,6 @@
+use crate::hal::{console_flush, console_putchar};
 use core::fmt::{self, Write};
 use log::{Level, LevelFilter, Log, Metadata, Record};
-use crate::hal::{console_flush, console_putchar};
-
 
 struct Stdout;
 
@@ -91,4 +90,3 @@ fn level_to_color_code(level: Level) -> u8 {
         Level::Trace => 90, // BrightBlack
     }
 }
-

@@ -1,9 +1,8 @@
-use riscv::register::time;
-use crate::hal::CLOCK_FREQ;
 use super::sbi::set_timer;
+use crate::hal::CLOCK_FREQ;
+use riscv::register::time;
 
 pub const TICKS_PER_SEC: usize = 25;
-
 
 pub fn get_time() -> usize {
     time::read()

@@ -1,6 +1,6 @@
-use alloc::vec::Vec;
-use crate::hal::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
 use crate::hal::arch::loongarch::config::USER_STACK_BASE;
+use crate::hal::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
+use alloc::vec::Vec;
 
 pub struct KernelStack(Vec<u8>);
 
@@ -20,7 +20,6 @@ impl KernelStack {
         (bottom, top)
     }
 }
-
 
 /// 根据线程id计算trap context的地址
 pub fn trap_cx_bottom_from_tid(tid: usize) -> usize {

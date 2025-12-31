@@ -1,12 +1,12 @@
 mod context;
 mod pid;
 mod process;
-mod task;
 mod signal;
+mod task;
 
 use alloc::sync::Arc;
 pub use context::TaskContext;
-pub use task::{TaskControlBlock};
+pub use task::TaskControlBlock;
 
 pub fn current_task() -> Option<Arc<TaskControlBlock>> {
     todo!()

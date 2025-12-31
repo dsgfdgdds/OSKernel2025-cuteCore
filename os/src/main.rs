@@ -30,11 +30,11 @@ fn clear_bss() {
     }
 }
 
+mod drivers;
 mod fs;
 mod mm;
 mod sync;
 mod syscall;
-mod drivers;
 
 #[no_mangle]
 pub fn rust_main() -> ! {

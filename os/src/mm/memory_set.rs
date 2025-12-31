@@ -1,12 +1,14 @@
+use crate::hal::{PageTableEntryImpl, PageTableImpl, MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE};
+use crate::mm::address::VPNRange;
+use crate::mm::{
+    frame_alloc, FrameTracker, PageTable, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
+};
+use crate::sync::UPIntrFreeCell;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use lazy_static::lazy_static;
-use crate::hal::{PageTableEntryImpl, PageTableImpl, MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE};
-use crate::mm::address::VPNRange;
-use crate::mm::{frame_alloc, FrameTracker, PageTable, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
-use crate::sync::UPIntrFreeCell;
 
 extern "C" {
     fn stext();
@@ -84,7 +86,7 @@ impl<T: PageTable> MemorySet<T> {
             VirtAddr::from(TRAMPOLINE).into(),
             PhysAddr::from(strampoline as *const () as usize).into(),
             // PTEFlags::R | PTEFlags::X,
-            MapPermission::R | MapPermission::X
+            MapPermission::R | MapPermission::X,
         );
     }
     /// Without kernel stacks.
@@ -248,7 +250,6 @@ pub struct MapArea {
     map_perm: MapPermission,
 }
 
-
 impl MapArea {
     pub fn new(
         start_va: VirtAddr,
@@ -350,4 +351,3 @@ bitflags! {
         const U = 1 << 4;
     }
 }
-

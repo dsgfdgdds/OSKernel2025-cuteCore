@@ -1,8 +1,6 @@
 use crate::hal::{HIGH_BASE_EIGHT, PAGE_SIZE};
 
-pub const MMIO: &[(usize, usize)] = &[
-    (0x400E_0000, 0x1_0000)
-];
+pub const MMIO: &[(usize, usize)] = &[(0x400E_0000, 0x1_0000)];
 
 pub const BLOCK_SZ: usize = 4096;
 // warning: 不能移除“ + HIGH_BASE_EIGHT”，会导致开发板上地址错误

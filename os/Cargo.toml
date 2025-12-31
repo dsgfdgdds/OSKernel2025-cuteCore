@@ -14,6 +14,8 @@ virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers", rev = "4e
 xmas-elf = "0.10.0"
 bit_field = "0.10.3"
 num_enum = { version = "0.5.11", default-features = false }
+embedded-hal = "=1.0.0-alpha.7"
+nb = "1.1.0"
 
 [target.loongarch64-unknown-none.dependencies]
 loongArch64 = "0.2.5"
@@ -28,10 +30,10 @@ riscv = []
 loongarch = []
 
 board_laqemu = ["loongarch"]
-board_la2k1000 = ["loongarch"]
+board_2k1000 = ["loongarch"]
 board_rvqemu = ["riscv"]
 
 
 default = ["board_rvqemu"]
 #default = ["board_laqemu"]
-#default = ["board_la2k1000"]
+#default = ["board_2k1000"]

@@ -1,6 +1,6 @@
-mod heap_allocator;
-mod frame_allocator;
 pub mod address;
+mod frame_allocator;
+mod heap_allocator;
 mod memory_set;
 mod pagetable;
 
@@ -10,7 +10,7 @@ pub fn init() {
     KERNEL_SPACE.exclusive_access().activate();
 }
 
-pub use frame_allocator::{FrameTracker, frame_alloc, frame_dealloc, frame_alloc_more};
-pub use address::{PhysAddr, VirtAddr, PhysPageNum, VirtPageNum, StepByOne};
+pub use crate::mm::memory_set::{kernel_token, MapPermission, MemorySet, KERNEL_SPACE};
+pub use address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+pub use frame_allocator::{frame_alloc, frame_alloc_more, frame_dealloc, FrameTracker};
 pub use pagetable::{PageTable, UserBuffer};
-pub use crate::mm::memory_set::{KERNEL_SPACE, kernel_token, MapPermission, MemorySet};

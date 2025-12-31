@@ -1,15 +1,15 @@
 mod context;
 mod mem_access;
 
+use super::merrera;
+use crate::hal::arch::loongarch::timer::TICKS_PER_SEC;
+use crate::hal::get_clock_freq;
+use context::GeneralRegs;
 use core::arch::{asm, global_asm};
-use loongArch64::register::{badi, badv, ecfg, eentry, era, estat, pgdh, tcfg};
 use loongArch64::register::ecfg::LineBasedInterrupt;
 use loongArch64::register::estat::{Exception, Trap};
-use crate::hal::arch::loongarch::timer::TICKS_PER_SEC;
-use super::merrera;
-use context::{GeneralRegs};
+use loongArch64::register::{badi, badv, ecfg, eentry, era, estat, pgdh, tcfg};
 use mem_access::Instruction;
-use crate::hal::get_clock_freq;
 
 global_asm!(include_str!("trap.S"));
 
@@ -21,8 +21,6 @@ extern "C" {
     pub fn __kern_trap();
 }
 
-
-
 #[allow(unused)]
 #[link_section = ".text.__rfill"]
 // #[naked]
@@ -33,9 +31,9 @@ pub extern "C" fn __rfill() {
     // let i = 0xA8;
     unsafe {
         asm!(
-        // PGD: 0x1b CRMD:0x0 PWCL:0x1c TLBRBADV:0x89 TLBERA:0x8a TLBRSAVE:0x8b SAVE:0x30
-        // TLBREHi: 0x8e STLBPS: 0x1e MERRsave:0x95
-        "
+            // PGD: 0x1b CRMD:0x0 PWCL:0x1c TLBRBADV:0x89 TLBERA:0x8a TLBRSAVE:0x8b SAVE:0x30
+            // TLBREHi: 0x8e STLBPS: 0x1e MERRsave:0x95
+            "
     csrwr  $t0, 0x8b
 
 
@@ -88,7 +86,7 @@ pub extern "C" fn __rfill() {
     csrwr  $t0, 0x8d
     b      2b
 ",
-        options(noreturn)
+            options(noreturn)
         )
     }
 }
@@ -97,11 +95,9 @@ pub fn init() {
     set_kernel_trap_entry();
 }
 
-
 pub fn set_kernel_trap_entry() {
-    eentry::set_eentry(__kern_trap as *const() as usize);
+    eentry::set_eentry(__kern_trap as *const () as usize);
 }
-
 
 pub fn set_machine_error_trap_entry() {
     todo!()
@@ -154,7 +150,7 @@ pub extern "C" fn trap_from_kernel(gr: &mut GeneralRegs) {
             loop {
                 let ins = Instruction::from(gr.pc as *const Instruction);
                 let op = ins.get_op_code();
-                if op.is_err()  {
+                if op.is_err() {
                     break;
                 }
                 let op = op.unwrap();
@@ -204,9 +200,7 @@ pub extern "C" fn trap_from_kernel(gr: &mut GeneralRegs) {
             //debug!("{:?}", gr);
             return;
         }
-        _ => {
-
-        }
+        _ => {}
     }
     panic!(
         "a trap {:?} from kernel! bad addr = {:#x}, bad instruction = {:#x}, pc:{:#x}, (subcode:{}), PGDH: {:?}, PGDL: {:?}, {}",

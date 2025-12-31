@@ -1,5 +1,3 @@
-use alloc::sync::{Arc, Weak};
-use alloc::vec::Vec;
 use crate::fs::File;
 use crate::hal::PageTableImpl;
 use crate::mm::MemorySet;
@@ -7,6 +5,8 @@ use crate::sync::{Condvar, Mutex, Semaphore, UPIntrFreeCell};
 use crate::task::pid::{PidHandle, RecycleAllocator};
 use crate::task::signal::SignalFlags;
 use crate::task::task::TaskControlBlock;
+use alloc::sync::{Arc, Weak};
+use alloc::vec::Vec;
 
 pub struct ProcessControlBlock {
     pub pid: PidHandle,

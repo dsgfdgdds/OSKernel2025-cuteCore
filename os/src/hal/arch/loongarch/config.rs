@@ -1,7 +1,6 @@
 use crate::hal::platform;
 use core::arch::asm;
 
-
 // Sizes
 pub const MEMORY_SIZE: usize = platform::MEM_SIZE;
 pub const USER_STACK_SIZE: usize = PAGE_SIZE * 0x40;

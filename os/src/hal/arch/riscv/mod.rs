@@ -1,13 +1,13 @@
 use crate::hal::arch::riscv::timer::set_next_trigger;
 
-pub mod trap;
-pub mod sbi;
 pub mod boot;
-pub mod timer;
 pub mod config;
-pub mod sv39;
 pub mod kernel_stack;
+pub mod sbi;
+pub mod sv39;
 pub mod sync;
+pub mod timer;
+pub mod trap;
 
 pub fn bootstrap_init() {}
 

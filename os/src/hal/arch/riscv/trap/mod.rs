@@ -1,14 +1,14 @@
 mod context;
 
+use crate::hal::TRAMPOLINE;
 use core::arch::global_asm;
-use riscv::register::{scause, sie, sscratch, sstatus, stval, stvec};
 use riscv::register::mtvec::TrapMode;
 use riscv::register::scause::{Interrupt, Trap};
-use crate::hal::TRAMPOLINE;
+use riscv::register::{scause, sie, sscratch, sstatus, stval, stvec};
 
-pub use context::TrapContext;
 use crate::hal::arch::riscv::timer::set_next_trigger;
 use crate::timer::check_timer;
+pub use context::TrapContext;
 
 global_asm!(include_str!("trap.S"));
 
@@ -21,7 +21,8 @@ fn set_kernel_trap_entry() {
         fn __alltraps();
         fn __alltraps_k();
     }
-    let __alltraps_k_va = __alltraps_k as *const() as usize - __alltraps as *const() as usize + TRAMPOLINE;
+    let __alltraps_k_va =
+        __alltraps_k as *const () as usize - __alltraps as *const () as usize + TRAMPOLINE;
     unsafe {
         stvec::write(__alltraps_k_va, TrapMode::Direct);
         sscratch::write(trap_from_kernel as usize);
@@ -52,7 +53,6 @@ pub fn trap_from_kernel(_trap_cx: &TrapContext) {
     }
 }
 
-
 pub fn enable_timer_interrupt() {
     unsafe {
         sie::set_stimer();
@@ -77,7 +77,6 @@ fn set_user_trap_entry() {
     }
 }
 
-
 #[no_mangle]
 pub fn trap_handler() -> ! {
     trap_return();
@@ -87,16 +86,3 @@ pub fn trap_handler() -> ! {
 pub fn trap_return() -> ! {
     todo!()
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,21 +1,23 @@
-pub mod trap;
-pub mod config;
-pub mod sbi;
-pub mod timer;
-pub mod kernel_stack;
-pub mod sync;
 mod boot;
-mod tlb;
-mod merrera;
+pub mod config;
+pub mod kernel_stack;
 mod laflex;
+mod merrera;
+pub mod sbi;
+pub mod sync;
+pub mod timer;
+mod tlb;
+pub mod trap;
 
-
-use loongArch64::register::{cpuid, crmd, dmw2, ecfg, euen, misc, prcfg1, pwch, pwcl, rvacfg, stlbps, tcfg, ticlr, tlbrehi, tlbrentry, MemoryAccessType};
+use crate::hal::platform::UART_BASE;
+use config::{DIR_WIDTH, MMAP_BASE, PAGE_SIZE_BITS, PTE_WIDTH, PTE_WIDTH_BITS, SUC_DMW_VSEG};
 use loongArch64::register::ecfg::LineBasedInterrupt;
-use config::{DIR_WIDTH, MMAP_BASE, PTE_WIDTH, PTE_WIDTH_BITS, SUC_DMW_VSEG, PAGE_SIZE_BITS};
+use loongArch64::register::{
+    cpuid, crmd, dmw2, ecfg, euen, misc, prcfg1, pwch, pwcl, rvacfg, stlbps, tcfg, ticlr, tlbrehi,
+    tlbrentry, MemoryAccessType,
+};
 use timer::get_timer_freq_first_time;
 use trap::{set_kernel_trap_entry, set_machine_error_trap_entry};
-use crate::hal::platform::UART_BASE;
 
 extern "C" {
     pub fn srfill();
@@ -67,7 +69,6 @@ pub fn bootstrap_init() {
     pwch::set_dir4_base(0);
     pwch::set_dir4_width(0);
 
-
     println!("[kernel] UART address: {:#x}", UART_BASE);
     println!("[bootstrap_init] {:?}", prcfg1::read());
 }
@@ -76,10 +77,10 @@ pub fn machine_init() {
     trap::init();
     get_timer_freq_first_time();
     /* println!(
- *     "[machine_init] VALEN: {}, PALEN: {}",
- *     cfg0.get_valen(),
- *     cfg0.get_palen()
- * ); */
+     *     "[machine_init] VALEN: {}, PALEN: {}",
+     *     cfg0.get_valen(),
+     *     cfg0.get_palen()
+     * ); */
     for i in 0..=6 {
         let j: usize;
         unsafe { core::arch::asm!("cpucfg {0},{1}",out(reg) j,in(reg) i) };
@@ -97,14 +98,5 @@ pub fn machine_init() {
     trap::enable_timer_interrupt();
 }
 
-
 pub type PageTableEntryImpl = laflex::LAFlexPageTableEntry;
 pub type PageTableImpl = laflex::LAFlexPageTable;
-
-
-
-
-
-
-
-

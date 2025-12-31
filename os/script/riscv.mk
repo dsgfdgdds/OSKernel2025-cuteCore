@@ -28,6 +28,9 @@ kernel:
 	@cp src/hal/arch/riscv/linker-$(BOARD).ld src/hal/arch/riscv/linker.ld
 	@LOG=${LOG} cargo build --${MODE} --target $(TARGET) --features "board_$(BOARD)"
 
+pre:
+	@rm .cargo/config.toml || true
+	@cp cargo/rv-config.toml .cargo/config.toml
 
 run:
 	qemu-system-riscv64 \
@@ -45,5 +48,5 @@ run:
 
 
 clean:
+	@rm -f ../kernel-qemu
 	@rm src/hal/arch/riscv/linker.ld
-	@cargo clean

@@ -1,16 +1,16 @@
-use core::arch::asm;
-use loongArch64::register::{asid, tlbehi, tlbelo0, tlbelo1, tlbidx};
 use crate::hal::arch::loongarch::config::PALEN;
 use crate::mm::{PhysPageNum, VirtPageNum};
+use core::arch::asm;
+use loongArch64::register::{asid, tlbehi, tlbelo0, tlbelo1, tlbidx};
 
 pub const USR_ASID: usize = 0;
 
-pub const KERN_ASID: usize = (1 << 10) -1;
+pub const KERN_ASID: usize = (1 << 10) - 1;
 
 #[inline(always)]
 pub fn set_asid(asid: usize) {
     let mut id = asid::read();
-     asid::set_asid(asid & (1 << id.asid_width() - 1));
+    asid::set_asid(asid & (1 << id.asid_width() - 1));
 }
 
 pub fn tlb_addr_allow_write(vpn: VirtPageNum, ppn: PhysPageNum) -> Result<(), ()> {
@@ -70,7 +70,6 @@ pub fn tlb_read(idx: usize) -> Result<(PhysPageNum, PhysPageNum), ()> {
     if ret.ne() {
         Err(())
     } else {
-
         let even_ppn: PhysPageNum = PhysPageNum(get_bits(tlbelo0::read().raw(), 12, PALEN));
         let odd_ppn: PhysPageNum = PhysPageNum(get_bits(tlbelo1::read().raw(), 12, PALEN));
         Ok((even_ppn, odd_ppn))

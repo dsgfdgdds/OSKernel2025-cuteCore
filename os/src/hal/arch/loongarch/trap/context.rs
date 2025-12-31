@@ -62,7 +62,6 @@ impl core::ops::IndexMut<usize> for GeneralRegs {
     }
 }
 
-
 impl Debug for GeneralRegs {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("GeneralRegs")
@@ -130,7 +129,6 @@ pub struct TrapContext {
     pub kernel_sp: usize,
 }
 
-
 // INFO: 由于 Prmd 没有实现 Debug，这里先注释掉
 // impl Debug for TrapContext {
 //     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -172,4 +170,3 @@ impl TrapContext {
         cx
     }
 }
-

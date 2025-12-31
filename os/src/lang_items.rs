@@ -16,7 +16,7 @@ fn panic(info: &PanicInfo) -> ! {
         }
         // None => println!("[kernel] panicked at '{}'", info.message().unwrap()),
         // None => println!("[kernel] panicked at '{}", info.message()),
-        None => {},
+        None => {}
     }
     shutdown()
 }

@@ -1,11 +1,14 @@
-use crate::mm::{FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, frame_alloc, PageTable, MapPermission};
+use crate::hal::PageTableImpl;
+use crate::mm::{
+    frame_alloc, FrameTracker, MapPermission, PageTable, PhysAddr, PhysPageNum, StepByOne,
+    VirtAddr, VirtPageNum,
+};
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::arch::asm;
 use bitflags::*;
+use core::arch::asm;
 use riscv::register::satp;
-use crate::hal::PageTableImpl;
 
 bitflags! {
     #[derive(Eq, PartialEq)]
@@ -61,10 +64,8 @@ pub struct SV39PageTable {
     frames: Vec<FrameTracker>,
 }
 
-
 /// Assume that it won't oom when creating/mapping.
 impl PageTable for SV39PageTable {
-
     fn new() -> Self {
         let frame = frame_alloc().unwrap();
         Self {
@@ -121,7 +122,10 @@ impl PageTable for SV39PageTable {
     fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: MapPermission) {
         let pte = self.find_pte_create(vpn).unwrap();
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
-        *pte = PageTableEntry::new(ppn, PTEFlags::from_bits(flags.bits()).unwrap() | PTEFlags::V);
+        *pte = PageTableEntry::new(
+            ppn,
+            PTEFlags::from_bits(flags.bits()).unwrap() | PTEFlags::V,
+        );
     }
     #[allow(unused)]
     fn unmap(&mut self, vpn: VirtPageNum) {
@@ -210,4 +214,3 @@ impl PageTable for SV39PageTable {
             .get_mut()
     }
 }
-

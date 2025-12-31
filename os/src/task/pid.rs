@@ -1,12 +1,11 @@
+use crate::sync::UPIntrFreeCell;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
-use crate::sync::UPIntrFreeCell;
 
 lazy_static! {
-static ref PID_ALLOCATOR: UPIntrFreeCell<RecycleAllocator> =
+    static ref PID_ALLOCATOR: UPIntrFreeCell<RecycleAllocator> =
         unsafe { UPIntrFreeCell::new(RecycleAllocator::new()) };
 }
-
 
 pub struct PidHandle(pub usize);
 
@@ -19,7 +18,6 @@ impl Drop for PidHandle {
         PID_ALLOCATOR.exclusive_access().dealloc(self.0);
     }
 }
-
 
 pub struct RecycleAllocator {
     current: usize,

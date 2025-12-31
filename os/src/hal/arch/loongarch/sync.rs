@@ -1,12 +1,11 @@
+use crate::sync::UPSafeCellRaw;
 use lazy_static::lazy_static;
 use loongArch64::register::crmd;
-use crate::sync::UPSafeCellRaw;
 
 lazy_static! {
     pub static ref INTR_MASKING_INFO: UPSafeCellRaw<IntrMaskingInfo> =
         unsafe { UPSafeCellRaw::new(IntrMaskingInfo::new()) };
 }
-
 
 pub struct IntrMaskingInfo {
     nested_level: usize,
@@ -32,7 +31,6 @@ impl IntrMaskingInfo {
 
         self.nested_level += 1;
     }
-
 
     pub fn exit(&mut self) {
         self.nested_level -= 1;

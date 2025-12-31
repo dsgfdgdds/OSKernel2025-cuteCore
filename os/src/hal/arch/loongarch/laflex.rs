@@ -1,20 +1,21 @@
-use super::tlb::{tlb_invalidate, tlb_global_invalidate};
+use super::tlb::{tlb_global_invalidate, tlb_invalidate};
+use crate::hal::{PageTableEntryImpl, PageTableImpl};
 use crate::{
     hal::{
-        MEMORY_HIGH_BASE, MEMORY_HIGH_BASE_VPN, MEMORY_SIZE, PAGE_SIZE, PAGE_SIZE_BITS, PALEN, VA_MASK, VPN_SEG_MASK,
+        MEMORY_HIGH_BASE, MEMORY_HIGH_BASE_VPN, MEMORY_SIZE, PAGE_SIZE, PAGE_SIZE_BITS, PALEN,
+        VA_MASK, VPN_SEG_MASK,
     },
-    mm::{address::*, frame_alloc, FrameTracker, PageTable, MapPermission},
+    mm::{address::*, frame_alloc, FrameTracker, MapPermission, PageTable},
 };
-use alloc::{sync::Arc, vec::Vec};
 use alloc::string::String;
+use alloc::{vec::Vec};
 use bitflags::*;
 use log::trace;
 use loongArch64::register::{pgdh, pgdl, MemoryAccessType};
-use crate::hal::{PageTableEntryImpl, PageTableImpl};
 
 // todo: 因之前默认vpn从0开始，所以DIRTY数组相当于vpn从零到size，但是移到高地址启动后，DIRTY位有偏移
 // todo: 相当于低位无效，这里粗暴的增大整个数组长度
-static mut DIRTY: [bool; MEMORY_SIZE*10 / PAGE_SIZE] = [false; MEMORY_SIZE*10 / PAGE_SIZE];
+static mut DIRTY: [bool; MEMORY_SIZE * 10 / PAGE_SIZE] = [false; MEMORY_SIZE * 10 / PAGE_SIZE];
 
 bitflags! {
     /// Page Table Entry flags
@@ -215,7 +216,7 @@ impl LAFlexPageTable {
             PhysPageNum(self.token())
         }
     }
-    
+
     pub fn set_dirty_bit(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
         tlb_invalidate();
         if self.is_ident_map(vpn) {

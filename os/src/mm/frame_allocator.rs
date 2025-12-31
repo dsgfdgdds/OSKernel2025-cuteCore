@@ -1,10 +1,10 @@
-use alloc::sync::Arc;
 use super::{PhysAddr, PhysPageNum};
 use crate::hal::MEMORY_END;
+use crate::sync::UPIntrFreeCell;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
-use crate::sync::UPIntrFreeCell;
 
 lazy_static! {
     pub static ref FRAME_ALLOCATOR: UPIntrFreeCell<FrameAllocatorImpl> =
@@ -16,7 +16,7 @@ pub fn init_frame_allocator() {
         fn ekernel();
     }
     FRAME_ALLOCATOR.exclusive_access().init(
-        PhysAddr::from(ekernel as *const() as usize).ceil(),
+        PhysAddr::from(ekernel as *const () as usize).ceil(),
         PhysAddr::from(MEMORY_END).floor(),
     );
 }
@@ -38,7 +38,6 @@ pub fn frame_alloc_more(num: usize) -> Option<Vec<FrameTracker>> {
 pub fn frame_dealloc(ppn: PhysPageNum) {
     FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
 }
-
 
 #[derive(Clone)]
 pub struct FrameTracker {
@@ -74,7 +73,6 @@ trait FrameAllocator {
     fn alloc_more(&mut self, pages: usize) -> Option<Vec<PhysPageNum>>;
     fn dealloc(&mut self, ppn: PhysPageNum);
 }
-
 
 pub struct StackFrameAllocator {
     current: usize,

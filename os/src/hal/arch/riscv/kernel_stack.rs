@@ -1,8 +1,8 @@
-use alloc::vec::Vec;
-use lazy_static::lazy_static;
 use crate::hal::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE};
 use crate::mm::{MapPermission, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPIntrFreeCell;
+use alloc::vec::Vec;
+use lazy_static::lazy_static;
 
 lazy_static! {
     static ref KSTACK_ALLOCATOR: UPIntrFreeCell<RecycleAllocator> =
@@ -46,7 +46,7 @@ impl RecycleAllocator {
             self.current - 1
         }
     }
-    
+
     fn dealloc(&mut self, id: usize) {
         assert!(id < self.current);
         assert!(
@@ -57,7 +57,6 @@ impl RecycleAllocator {
         self.recycled.push(id);
     }
 }
-
 
 pub struct KernelStack(pub usize);
 
