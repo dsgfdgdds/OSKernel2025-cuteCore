@@ -1,3 +1,4 @@
+use alloc::sync::Arc;
 use super::{PhysAddr, PhysPageNum};
 use crate::hal::MEMORY_END;
 use alloc::vec::Vec;
@@ -20,18 +21,23 @@ pub fn init_frame_allocator() {
     );
 }
 
-pub fn frame_alloc() -> Option<FrameTracker> {
+pub fn frame_alloc() -> Option<Arc<FrameTracker>> {
     FRAME_ALLOCATOR
         .write()
         .alloc()
-        .map(FrameTracker::new)
+        .map(|t| Arc::new(FrameTracker::new(t)))
 }
 
-pub fn frame_alloc_more(num: usize) -> Option<Vec<FrameTracker>> {
-    FRAME_ALLOCATOR
-        .write()
-        .alloc_more(num)
-        .map(|x| x.iter().map(|&t| FrameTracker::new(t)).collect())
+pub fn frame_alloc_more(num: usize) -> Option<Vec<Arc<FrameTracker>>> {
+    let mut frames = Vec::with_capacity(num);
+    for _ in 0..num {
+        if let Some(frame_tracker) = frame_alloc() {
+            frames.push(frame_tracker);
+        } else {
+            return None;
+        }
+    }
+    Some(frames)
 }
 
 pub fn frame_dealloc(ppn: PhysPageNum) {
@@ -39,7 +45,7 @@ pub fn frame_dealloc(ppn: PhysPageNum) {
 }
 
 
-
+#[derive(Clone)]
 pub struct FrameTracker {
     pub ppn: PhysPageNum,
 }

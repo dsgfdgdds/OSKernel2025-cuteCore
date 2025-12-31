@@ -43,6 +43,7 @@ pub fn console_getchar() -> usize {
 pub fn console_flush() {}
 
 pub fn shutdown() -> ! {
+    println!("run shutdown");
     sbi_call(SBI_SHUTDOWN, 0, 0, 0);
     panic!("It should shutdown!");
 }

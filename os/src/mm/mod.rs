@@ -13,4 +13,4 @@ pub fn init() {
 pub use frame_allocator::{FrameTracker, frame_alloc, frame_dealloc, frame_alloc_more};
 pub use address::{PhysAddr, VirtAddr, PhysPageNum, VirtPageNum, StepByOne};
 pub use pagetable::PageTable;
-pub use crate::mm::memory_set::{KERNEL_SPACE, kernel_token};
+pub use crate::mm::memory_set::{KERNEL_SPACE, kernel_token, MapPermission};

@@ -2,11 +2,13 @@
 #![no_main]
 #![feature(panic_info_message)]
 #![feature(alloc_error_handler)]
+#![feature(asm_const)]
 
 
 extern crate core;
 extern crate alloc;
 
+use crate::hal::shutdown;
 
 #[macro_use]
 pub mod console;
@@ -36,5 +38,6 @@ pub fn rust_main() -> ! {
     mm::init();
     println!("Memory management initialized.");
     hal::machine_init();
-    panic!("Shouldn't get here!");
+    println!("machine init completed.");
+    shutdown();
 }

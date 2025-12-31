@@ -1,8 +1,11 @@
-use crate::mm::{FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, frame_alloc, PageTable};
+use crate::mm::{FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum, frame_alloc, PageTable, MapPermission};
 use alloc::string::String;
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::arch::asm;
 use bitflags::*;
+use riscv::register::satp;
 use crate::hal::PageTableImpl;
 
 bitflags! {
@@ -56,7 +59,7 @@ impl PageTableEntry {
 
 pub struct SV39PageTable {
     root_ppn: PhysPageNum,
-    frames: Vec<FrameTracker>,
+    frames: Vec<Arc<FrameTracker>>,
 }
 
 
@@ -80,11 +83,11 @@ impl PageTable for SV39PageTable {
     }
 
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs = vpn.indexes::<3>();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
         for (i, idx) in idxs.iter().enumerate() {
-            let pte = &mut ppn.get_pte_array()[*idx];
+            let pte = &mut ppn.get_pte_array::<PageTableEntry>()[*idx];
             if i == 2 {
                 result = Some(pte);
                 break;
@@ -99,11 +102,11 @@ impl PageTable for SV39PageTable {
         result
     }
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs = vpn.indexes::<3>();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
         for (i, idx) in idxs.iter().enumerate() {
-            let pte = &mut ppn.get_pte_array()[*idx];
+            let pte = &mut ppn.get_pte_array::<PageTableEntry>()[*idx];
             if i == 2 {
                 result = Some(pte);
                 break;
@@ -116,10 +119,10 @@ impl PageTable for SV39PageTable {
         result
     }
     #[allow(unused)]
-    fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
+    fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: MapPermission) {
         let pte = self.find_pte_create(vpn).unwrap();
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
-        *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
+        *pte = PageTableEntry::new(ppn, PTEFlags::from_bits(flags.bits()).unwrap() | PTEFlags::V);
     }
     #[allow(unused)]
     fn unmap(&mut self, vpn: VirtPageNum) {
@@ -138,10 +141,17 @@ impl PageTable for SV39PageTable {
             (aligned_pa_usize + offset).into()
         })
     }
+    fn activate(&self) {
+        let satp = self.token();
+        unsafe {
+            satp::write(satp);
+            asm!("sfence.vma");
+        }
+    }
+
     fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
-
 
     fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
         let page_table: PageTableImpl = PageTable::from_token(token);

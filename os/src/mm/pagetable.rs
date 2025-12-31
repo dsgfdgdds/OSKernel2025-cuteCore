@@ -1,19 +1,18 @@
 use alloc::string::String;
 use alloc::vec::Vec;
-use crate::hal::arch::riscv::sv39::PageTableEntry;
-use crate::hal::{PTEFlags, PageTableEntryImpl};
-use crate::mm::{PhysPageNum, VirtAddr, VirtPageNum, PhysAddr};
+use crate::hal::PageTableEntryImpl;
+use crate::mm::{PhysPageNum, VirtAddr, VirtPageNum, PhysAddr, MapPermission};
 
 pub trait PageTable {
     fn new() -> Self;
 
     fn from_token(token: usize) -> Self;
 
-    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry>;
+    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntryImpl>;
 
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry>;
+    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntryImpl>;
 
-    fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags);
+    fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: MapPermission);
 
     fn unmap(&mut self, vpn: VirtPageNum);
 
@@ -21,6 +20,7 @@ pub trait PageTable {
 
     fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr>;
 
+    fn activate(&self);
 
     fn token(&self) -> usize;
 

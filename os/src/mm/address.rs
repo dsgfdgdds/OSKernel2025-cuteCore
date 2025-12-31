@@ -155,7 +155,7 @@ impl From<PhysPageNum> for PhysAddr {
 }
 
 impl VirtPageNum {
-    pub fn indexes(&self) -> [usize; 3] {
+    pub fn indexes<const T: usize>(&self) -> [usize; 3] {
         let mut vpn = self.0;
         let mut idx = [0usize; 3];
         for i in (0..3).rev() {
@@ -175,7 +175,7 @@ impl PhysAddr {
     }
 }
 impl PhysPageNum {
-    pub fn get_pte_array(&self) -> &'static mut [PageTableEntryImpl] {
+    pub fn get_pte_array<T>(&self) -> &'static mut [PageTableEntryImpl] {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntryImpl, 512) }
     }
