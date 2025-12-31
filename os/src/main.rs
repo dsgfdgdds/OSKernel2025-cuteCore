@@ -38,8 +38,8 @@ mod syscall;
 
 #[no_mangle]
 pub fn rust_main() -> ! {
-    clear_bss();
     hal::bootstrap_init();
+    clear_bss();
     console::init();
     println!("Welcome to RustOS!");
     mm::init();

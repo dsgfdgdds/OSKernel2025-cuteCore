@@ -1,13 +1,14 @@
-mod boot;
 pub mod config;
 pub mod kernel_stack;
-mod laflex;
-mod merrera;
+pub mod trap;
 pub mod sbi;
 pub mod sync;
 pub mod timer;
+mod boot;
+mod laflex;
+mod merrera;
+
 mod tlb;
-pub mod trap;
 
 use crate::hal::platform::UART_BASE;
 use config::{DIR_WIDTH, MMAP_BASE, PAGE_SIZE_BITS, PTE_WIDTH, PTE_WIDTH_BITS, SUC_DMW_VSEG};

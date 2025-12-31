@@ -8,6 +8,7 @@ pub mod sv39;
 pub mod sync;
 pub mod timer;
 pub mod trap;
+pub mod switch;
 
 pub fn bootstrap_init() {}
 

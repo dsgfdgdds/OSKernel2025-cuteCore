@@ -1,4 +1,4 @@
-mod context;
+pub mod context;
 
 use crate::hal::TRAMPOLINE;
 use core::arch::global_asm;

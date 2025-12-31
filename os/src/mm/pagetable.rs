@@ -1,5 +1,5 @@
-use crate::hal::PageTableEntryImpl;
-use crate::mm::{MapPermission, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
+use crate::hal::{PageTableEntryImpl, PageTableImpl};
+use crate::mm::{MapPermission, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -23,14 +23,66 @@ pub trait PageTable {
     fn activate(&self);
 
     fn token(&self) -> usize;
+    
+}
 
-    fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]>;
 
-    fn translated_str(token: usize, ptr: *const u8) -> String;
+pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+    let page_table: PageTableImpl = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + len;
+    let mut v = Vec::new();
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let ppn = page_table.translate(vpn).unwrap().ppn();
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        if end_va.page_offset() == 0 {
+            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
+        } else {
+            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+        }
+        start = end_va.into();
+    }
+    v
+}
 
-    fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T;
+/// Load a string from other address spaces into kernel space without an end `\0`.
+pub fn translated_str(token: usize, ptr: *const u8) -> String {
+    let page_table: PageTableImpl = PageTable::from_token(token);
+    let mut string = String::new();
+    let mut va = ptr as usize;
+    loop {
+        let ch: u8 = *(page_table
+            .translate_va(VirtAddr::from(va))
+            .unwrap()
+            .get_mut());
+        if ch == 0 {
+            break;
+        }
+        string.push(ch as char);
+        va += 1;
+    }
+    string
+}
 
-    fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T;
+pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
+    let page_table: PageTableImpl = PageTable::from_token(token);
+    page_table
+        .translate_va(VirtAddr::from(ptr as usize))
+        .unwrap()
+        .get_ref()
+}
+
+pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
+    let page_table: PageTableImpl = PageTable::from_token(token);
+    let va = ptr as usize;
+    page_table
+        .translate_va(VirtAddr::from(va))
+        .unwrap()
+        .get_mut()
 }
 
 pub struct UserBuffer {
