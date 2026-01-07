@@ -34,6 +34,7 @@ impl FatFsBlockDevice {
 pub enum FatFsError {
     IoError,
     InvalidOffset,
+    ENOENT,
 }
 
 impl IoError for FatFsError {

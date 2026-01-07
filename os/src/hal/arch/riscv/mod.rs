@@ -65,3 +65,5 @@ pub type PageTableImpl = sv39::SV39PageTable;
 /// # Overview
 /// - 统一内核上层使用接口，实际使用 SV39 页表条目
 pub type PageTableEntryImpl = sv39::PageTableEntry;
+
+pub type TrapImpl = riscv::register::scause::Trap;

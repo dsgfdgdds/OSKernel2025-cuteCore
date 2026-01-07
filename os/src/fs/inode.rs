@@ -1,6 +1,7 @@
 use crate::console::print;
-use crate::fs::fat32::FAT_FS;
-use crate::fs::FatFsBlockDevice;
+use crate::fs::fat32::{FatFsError, FAT_FS};
+use crate::fs::FatFsBlockDevice ;
+use crate::syscall::StatMode;
 use crate::mm::UserBuffer;
 use crate::sync::UPIntrFreeCell;
 use crate::task::current_process;
@@ -8,7 +9,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use bitflags::bitflags;
-use fatfs::{DefaultTimeProvider, Dir, File, FileSystem, LossyOemCpConverter, Read, Write};
+use fatfs::{DefaultTimeProvider, Dir, Error, File, FileSystem, LossyOemCpConverter, Read, Write};
 use lazy_static::lazy_static;
 
 pub struct OSInode {
@@ -247,6 +248,39 @@ pub fn open_file(path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         Arc::new(OSInode::new(readable, writable, FatType::File(inode)))
     })
 }
+/// 在指定目录下打开文件
+pub fn open_file_at(
+    base_dir: &String,
+    path: &str,
+    flags: OpenFlags,
+    mode: StatMode,
+) -> Option<Arc<OSInode>> {
+    let (readable, writable) = flags.read_write();
+
+    // 解析完整路径
+    let full_path = resolve_path(path, &base_dir);
+    let path_in_fs = full_path.strip_prefix("/").unwrap_or(&full_path);
+
+    // 获取根目录的独占访问
+    let root_dir = ROOT_DIR.exclusive_access();
+
+    // 尝试打开或创建文件
+        let maybe_inode = if flags.contains(OpenFlags::CREATE) {
+            root_dir
+                .open_file(path_in_fs)
+                .or_else(|_| root_dir.create_file(path_in_fs))
+                .ok()
+        } else {
+            root_dir.open_file(path_in_fs).ok()
+        };
+        maybe_inode.map(|mut inode| {
+            if flags.contains(OpenFlags::TRUNC) {
+                inode.truncate().expect("Truncation failed");
+            }
+            Arc::new(OSInode::new(readable, writable, FatType::File(inode)))
+        })
+}
+
 
 pub fn open_dir(path: &str) -> Result<(), ()> {
     let full_path = {
@@ -262,3 +296,4 @@ pub fn open_dir(path: &str) -> Result<(), ()> {
 
     root_dir.open_dir(path_in_fs).map(|_| ()).map_err(|_| ())
 }
+

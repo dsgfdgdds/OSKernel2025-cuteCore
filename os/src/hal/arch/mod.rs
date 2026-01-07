@@ -55,6 +55,7 @@ pub use riscv::{
     timer::{get_clock_freq, get_time},
     // Trap 相关
     trap::{context::TrapContext, trap_handler, trap_return},
+    TrapImpl,
     // 页表类型别名
     PageTableEntryImpl,
     PageTableImpl,

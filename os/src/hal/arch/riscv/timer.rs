@@ -35,6 +35,7 @@ pub const TICKS_PER_SEC: usize = 25;
 /// # Returns
 /// - 当前 CPU tick 数
 pub fn get_time() -> usize {
+    // println!("get get_time") ;
     time::read()
 }
 
