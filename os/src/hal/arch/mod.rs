@@ -56,6 +56,7 @@ pub use riscv::{
     // Trap 相关
     trap::{context::TrapContext, trap_handler, trap_return},
     // 页表类型别名
+    TrapImpl,
     PageTableEntryImpl,
     PageTableImpl,
 };

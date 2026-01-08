@@ -47,11 +47,15 @@ bitflags! {
     /// - `SIGSEGV`：
     ///   - 段错误（非法内存访问）
     pub struct SignalFlags: u32 {
-        const SIGINT    = 1 << 2;
-        const SIGILL    = 1 << 4;
-        const SIGABRT   = 1 << 6;
-        const SIGFPE    = 1 << 8;
-        const SIGSEGV   = 1 << 11;
+        const SIGINT    = 1 << 1;
+        const SIGILL    = 1 << 3;
+        const SIGABRT   = 1 << 5;
+        const SIGFPE    = 1 << 7;
+        const SIGSEGV   = 1 << 10;
+        const SIGALRM	= 1 << 13;
+        const SIGCHLD	= 1 << 16;
+        const SIGVTALRM	= 1 << 25;
+        const SIGPROF	= 1 << 26;
     }
 }
 
@@ -95,4 +99,13 @@ impl SignalFlags {
             None
         }
     }
+    const EMPTY: SignalFlags = SignalFlags::empty();
+    pub fn from_signum(signum: usize) -> Result<SignalFlags, ()> {
+        match signum {
+            0 => Ok(SignalFlags::EMPTY),
+            1..=64 => Ok(SignalFlags::from_bits_truncate(1 << (signum - 1))),
+            _ => Err(()),
+        }
+    }
 }
+

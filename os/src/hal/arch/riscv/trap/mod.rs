@@ -30,6 +30,7 @@ use crate::syscall::syscall;
 use crate::task::{
     check_signals_of_current, current_add_signal, current_trap_cx, current_trap_cx_user_va,
     current_user_token, exit_current_and_run_next, suspend_current_and_run_next, SignalFlags,
+    current_process,
 };
 use core::arch::{asm, global_asm};
 use riscv::register::mtvec::TrapMode;
@@ -139,6 +140,11 @@ fn set_user_trap_entry() {
 #[no_mangle]
 pub fn trap_handler() -> ! {
     set_kernel_trap_entry();
+    {
+        let current_process = current_process();
+        let mut inner = current_process.inner_exclusive_access();
+        inner.update_process_times_enter_trap();
+    }
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -192,6 +198,11 @@ pub fn trap_handler() -> ! {
                 stval
             );
         }
+    }
+    {
+        let current_process = current_process();
+        let mut inner = current_process.inner_exclusive_access();
+        inner.update_process_times_leave_trap();
     }
     // 检查并处理信号，如进程因异常需要退出
     if let Some((errno, msg)) = check_signals_of_current() {

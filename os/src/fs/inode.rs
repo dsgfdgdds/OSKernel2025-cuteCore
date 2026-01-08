@@ -1,7 +1,8 @@
 use crate::console::print;
-use crate::fs::fat32::FAT_FS;
+use crate::fs::fat32::{FatFsError,FAT_FS};
 use crate::fs::FatFsBlockDevice;
 use crate::mm::UserBuffer;
+use crate::syscall::StatMode;
 use crate::sync::UPIntrFreeCell;
 use crate::task::current_process;
 use alloc::string::String;
@@ -10,7 +11,7 @@ use alloc::vec::Vec;
 use core::any::Any;
 use core::cell::UnsafeCell;
 use bitflags::bitflags;
-use fatfs::{DefaultTimeProvider, Dir, File, FileSystem, LossyOemCpConverter, Read, Seek, SeekFrom, Write};
+use fatfs::{DefaultTimeProvider, Dir, Error, File, FileSystem, LossyOemCpConverter, Read, Seek, SeekFrom, Write};
 use lazy_static::lazy_static;
 use crate::fs::file::{BLK_SIZE, Stat, S_IFDIR, S_IFREG, UserStat};
 
@@ -309,6 +310,39 @@ pub fn open_file(path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         Arc::new(OSInode::new(readable, writable, FatType::File(inode),false))
     })
 }
+/// 在指定目录下打开文件
+pub fn open_file_at(
+    base_dir: &String,
+    path: &str,
+    flags: OpenFlags,
+    mode: StatMode,
+) -> Option<Arc<OSInode>> {
+    let (readable, writable) = flags.read_write();
+
+    // 解析完整路径
+    let full_path = resolve_path(path, &base_dir);
+    let path_in_fs = full_path.strip_prefix("/").unwrap_or(&full_path);
+
+    // 获取根目录的独占访问
+    let root_dir = ROOT_DIR.exclusive_access();
+
+    // 尝试打开或创建文件
+    let maybe_inode = if flags.contains(OpenFlags::CREATE) {
+        root_dir
+            .open_file(path_in_fs)
+            .or_else(|_| root_dir.create_file(path_in_fs))
+            .ok()
+    } else {
+        root_dir.open_file(path_in_fs).ok()
+    };
+    maybe_inode.map(|mut inode| {
+        if flags.contains(OpenFlags::TRUNC) {
+            inode.truncate().expect("Truncation failed");
+        }
+        Arc::new(OSInode::new(readable, writable, FatType::File(inode), false))
+    })
+}
+
 ///创建目录，如果存在就返回err(-1)
 /// 后续需要完善没有父节点的情况
 pub fn create_dir(path: &str) -> Result<Arc<OSInode>, isize> {

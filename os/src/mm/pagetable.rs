@@ -119,6 +119,7 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .get_mut()
 }
 
+
 /// 用户缓冲区容器
 ///
 /// ## Design
@@ -195,8 +196,95 @@ impl UserBuffer {
             self.buffers[0].as_ptr()
         }
     }
-}
+    pub fn read(&self, offset: Option<usize>, dst: &mut [u8]) -> usize {
+        let offset = offset.unwrap_or(0); // 默认从 0 开始读取
+        if offset >= self.len() {
+            return 0;
+        }
 
+        let mut read_bytes = 0usize;
+        let mut dst_start = 0usize;
+        let dst_len = dst.len();
+
+        for buffer in self.buffers.iter() {
+            let dst_end = dst_start + buffer.len();
+
+            // 计算目标缓冲区的有效区间（受 offset 和 dst_len 限制）
+            let copy_dst_start = dst_start.max(offset);
+            let copy_dst_end = dst_end.min(offset + dst_len);
+
+            if copy_dst_start >= copy_dst_end {
+                dst_start = dst_end;
+                continue;
+            }
+
+            // 计算源数据的对应区间（当前 buffer 的有效部分）
+            let copy_src_start = copy_dst_start - offset;
+            let copy_src_end = copy_src_start + (copy_dst_end - copy_dst_start);
+
+            // 计算目标缓冲区的写入区间
+            let copy_buffer_start = copy_dst_start - dst_start;
+            let copy_buffer_end = copy_buffer_start + (copy_dst_end - copy_dst_start);
+
+            // 执行拷贝
+            dst[copy_src_start..copy_src_end]
+                .copy_from_slice(&buffer[copy_buffer_start..copy_buffer_end]);
+
+            read_bytes += copy_dst_end - copy_dst_start;
+            dst_start = dst_end;
+
+            // 如果已经读完所有数据，提前退出
+            if read_bytes == dst_len {
+                break;
+            }
+        }
+
+        read_bytes
+    }
+
+    // new add; if offset is None, write from the beginning
+    pub fn write_buffer(&mut self, offset: Option<usize>, src: &[u8]) -> usize {
+        let offset = offset.unwrap_or(0); // 默认从 0 开始写入
+        if offset >= self.len() {
+            return 0;
+        }
+
+        let mut write_bytes = 0usize;
+        let mut dst_start = 0usize;
+        let src_len = src.len();
+
+        for buffer in self.buffers.iter_mut() {
+            let dst_end = dst_start + buffer.len();
+
+            // 计算目标缓冲区的有效区间（受 offset 和 src_len 限制）
+            let copy_dst_start = dst_start.max(offset);
+            let copy_dst_end = dst_end.min(offset + src_len);
+
+            if copy_dst_start >= copy_dst_end {
+                dst_start = dst_end;
+                continue;
+            }
+
+            // 计算源数据的对应区间
+            let copy_src_start = copy_dst_start - offset;
+            let copy_src_end = copy_src_start + (copy_dst_end - copy_dst_start);
+
+            // 计算当前 buffer 的写入区间
+            let copy_buffer_start = copy_dst_start - dst_start;
+            let copy_buffer_end = copy_buffer_start + (copy_dst_end - copy_dst_start);
+
+            // 执行拷贝
+            buffer[copy_buffer_start..copy_buffer_end]
+                .copy_from_slice(&src[copy_src_start..copy_src_end]);
+
+            write_bytes += copy_dst_end - copy_dst_start;
+            dst_start = dst_end;
+        }
+
+        write_bytes
+
+    }
+  }
 /// 为 UserBuffer 实现迭代器
 ///
 /// # Design
@@ -256,4 +344,27 @@ pub fn copy_to_user<T: 'static + Copy>(
     }
     Ok(())
 }
-
+pub fn copy_from_user<T: 'static + Copy>(
+    token: usize,
+    src: *const T,
+    dst: *mut T,
+) -> Result<(), isize> {
+    let size = core::mem::size_of::<T>();
+    // if all data of `*src` is in the same page, read directly
+    if VirtAddr::from(src as usize).floor() == VirtAddr::from(src as usize + size - 1).floor() {
+        unsafe { core::ptr::copy_nonoverlapping(translated_ref(token, src), dst, 1) };
+    // or we should use UserBuffer to read across user space pages
+    } else {
+        UserBuffer::new(translated_byte_buffer(token, src as *const u8, size))
+            .read(None,unsafe { core::slice::from_raw_parts_mut(dst as *mut u8, size) });
+    }
+    Ok(())
+}
+#[inline(always)]
+pub fn get_from_user<T: 'static + Copy>(token: usize, src: *const T) -> T {
+    unsafe {
+        let mut dst: T = core::mem::MaybeUninit::uninit().assume_init();
+        copy_from_user(token, src, &mut dst);
+        return dst;
+    }
+}
