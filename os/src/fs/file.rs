@@ -5,41 +5,14 @@ use crate::mm::{UserBuffer};
 
 pub trait File: Send + Sync {
     // TODO：先给默认值，后续在改，否则impl File for OSInode的时候会报错
-    fn readable(&self) -> bool {
-        false
-    }
-    fn writable(&self) -> bool {
-        false
-    }
-    fn read(&self, buf: UserBuffer) -> usize {
-        0
-    }
-    fn write(&self, buf: UserBuffer) -> usize {
-        0
-    }
-    fn get_stat(&self) -> UserStat {
-        UserStat {
-            st_dev: 0,
-            st_ino: 0,
-            st_mode: 0,
-            st_nlink: 0,
-            st_uid: 0,
-            st_gid: 0,
-            st_rdev: 0,
-            st_size: 0,
-            st_blksize: 0,
-            st_blocks: 0,
-        }
-    }
+    fn readable(&self) -> bool;
+    fn writable(&self) -> bool;
+    fn read(&self, buf: UserBuffer) -> usize;
+    fn write(&self, buf: UserBuffer) -> usize;
+    fn get_stat(&self) -> UserStat;
     // 默认返回，在impl File for OSInode里会覆盖
-    fn is_dir(&self) -> bool {
-        false
-    }
-
-    fn get_path(&self) -> String {
-        String::new()
-    }
-    
+    fn is_dir(&self) -> bool;
+    fn get_path(&self) -> String;
 }
 
 pub const S_IFREG: u32 = 0o100000; //普通文件

@@ -23,7 +23,7 @@ pub struct OSInode {
     // 未来如果需要支持多核，则需要改用更强的同步机制（如 spin::Mutex）。
     file: UPIntrFreeCell<FatType>,
     pub is_directory: bool, // 是否是目录
-    pub path: String,        // 文件的完整路径
+    path: String,       // 文件的完整路径
 }
 
 pub enum FatType {
