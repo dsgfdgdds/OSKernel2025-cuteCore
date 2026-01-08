@@ -1,27 +1,29 @@
-use crate::console::print;
 use crate::fs::fat32::FAT_FS;
+use crate::fs::file::{Stat, UserStat, BLK_SIZE};
 use crate::fs::FatFsBlockDevice;
 use crate::mm::UserBuffer;
 use crate::sync::UPIntrFreeCell;
+use crate::syscall::StatMode;
 use crate::task::current_process;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::any::Any;
-use core::cell::UnsafeCell;
 use bitflags::bitflags;
-use fatfs::{DefaultTimeProvider, Dir, File, FileSystem, LossyOemCpConverter, Read, Seek, SeekFrom, Write};
+use core::cell::UnsafeCell;
+use fatfs::{
+    DefaultTimeProvider, Dir, File, FileSystem, LossyOemCpConverter, Read, Seek, SeekFrom, Write,
+};
 use lazy_static::lazy_static;
-use log::Log;
-use crate::fs::file::{BLK_SIZE, Stat, S_IFDIR, S_IFREG, UserStat};
 
-pub const AT_FDCWD:usize = 100usize.wrapping_neg();
+pub const AT_FDCWD: usize = 100usize.wrapping_neg();
 pub struct OSInode {
     readable: bool,
     writable: bool,
-    Stat: Stat,
+    stat: Stat,
     // 未来如果需要支持多核，则需要改用更强的同步机制（如 spin::Mutex）。
     file: UPIntrFreeCell<FatType>,
+    pub is_directory: bool, // 是否是目录
+    path: String,           // 文件的完整路径
 }
 
 pub enum FatType {
@@ -40,18 +42,22 @@ unsafe impl Send for OSInode {}
 unsafe impl Sync for OSInode {}
 
 impl OSInode {
-    pub fn new(readable: bool, writable: bool, file: FatType, is_dir:bool) -> Self {
-        let mut st_mode = if is_dir { 0x040000 } else { 0x100000 }; // S_IFDIR / S_IFREG
-        if readable { st_mode |= 0o444 } // r--
-        if writable { st_mode |= 0o222 } // -w-
+    pub fn new(readable: bool, writable: bool, file: FatType, is_dir: bool, path: String) -> Self {
+        let mut st_mode = if is_dir { 0o040000 } else { 0o100000 }; // S_IFDIR / S_IFREG
+        if readable {
+            st_mode |= 0o444
+        } // r--
+        if writable {
+            st_mode |= 0o222
+        } // -w-
 
         let st_size = 0;
         let st_blocks = ((st_size + 511) / 512) as u64;
-
+        let is_directory = is_dir;
         Self {
             readable,
             writable,
-            Stat: Stat {
+            stat: Stat {
                 st_dev: 0,
                 st_ino: 0, // 或者生成伪 inode
                 st_mode,
@@ -63,12 +69,13 @@ impl OSInode {
                 st_size: UnsafeCell::new(st_size),
                 st_blksize: BLK_SIZE,
                 __pad2: 0,
-                st_blocks:UnsafeCell::new(st_blocks),
+                st_blocks: UnsafeCell::new(st_blocks),
             },
             file: unsafe { UPIntrFreeCell::new(file) },
+            is_directory,
+            path,
         }
     }
-
 
     /// 当前 read_all 时从 offset 到 EOF 而不是从文件开始到 EOF
     /// 把注释部分取消则从文件开始到 EOF
@@ -94,7 +101,15 @@ impl OSInode {
         }
         v
     }
+    pub fn is_dir(&self) -> bool {
+        let inner = self.file.exclusive_access();
+        match *inner {
+            FatType::Dir(_) => true,
+            FatType::File(_) => false,
+        }
+    }
 }
+
 lazy_static! {
     pub static ref ROOT_DIR: UPIntrFreeCell<Dir<'static, FatFsBlockDevice, DefaultTimeProvider, LossyOemCpConverter>> = {
         // 获取文件系统的锁
@@ -126,7 +141,6 @@ pub fn list_apps() {
 }
 
 bitflags! {
-    #[derive(Debug)]
     pub struct OpenFlags: u32 {
         // 只读
         const RDONLY = 0;
@@ -138,7 +152,8 @@ bitflags! {
         const CREATE = 1 << 6;
         // 截断（若存在则以可写方式打开，但是长度清空为0）
         const TRUNC = 1 << 10;
-        const DIRECTORY = 1 << 17; // 目录（O_DIRECTORY = 0x0200000）
+        //
+        const DIRECTORY = 1 << 21;
     }
 }
 
@@ -183,7 +198,7 @@ impl super::File for OSInode {
         total_read_size
     }
 
-    fn write(& self, buf: UserBuffer) -> usize {
+    fn write(&self, buf: UserBuffer) -> usize {
         let mut inner = self.file.exclusive_access();
         let mut total_write_size = 0usize;
         for slice in buf.buffers.iter() {
@@ -200,25 +215,35 @@ impl super::File for OSInode {
                 }
             }
         }
-        self.Stat.update_after_write(total_write_size);
+
+        self.stat.update_after_write(total_write_size);
         total_write_size
     }
     fn get_stat(&self) -> UserStat {
-   unsafe {
-       UserStat {
-           st_dev: self.Stat.st_dev,
-           st_ino: self.Stat.st_ino,
-           st_mode: self.Stat.st_mode,
-           st_nlink: self.Stat.st_nlink,
-           st_uid: self.Stat.st_uid,
-           st_gid: self.Stat.st_gid,
-           st_rdev: self.Stat.st_rdev,
-           st_size: *self.Stat.st_size.get(),
-           st_blksize: self.Stat.st_blksize,
-           st_blocks: *self.Stat.st_blocks.get(),
-       }
-   }
-}
+        unsafe {
+            UserStat {
+                st_dev: self.stat.st_dev,
+                st_ino: self.stat.st_ino,
+                st_mode: self.stat.st_mode,
+                st_nlink: self.stat.st_nlink,
+                st_uid: self.stat.st_uid,
+                st_gid: self.stat.st_gid,
+                st_rdev: self.stat.st_rdev,
+                st_size: *self.stat.st_size.get(),
+                st_blksize: self.stat.st_blksize,
+                st_blocks: *self.stat.st_blocks.get(),
+            }
+        }
+    }
+
+    fn is_dir(&self) -> bool {
+        self.is_directory
+    }
+
+    fn get_path(&self) -> String {
+        self.path.clone()
+    }
+
 
     /// 从 offset 读取文件内容
     fn read_at(&self, offset: usize, buf: &mut [u8]) -> Result<usize, isize> {
@@ -230,7 +255,9 @@ impl super::File for OSInode {
                 let mut file_ref = file; // File 类型本身可能在 UPIntrFreeCell 内部
 
                 // seek 到 offset
-                file_ref.seek(SeekFrom::Start(offset as u64)).map_err(|_| -1isize)?;
+                file_ref
+                    .seek(SeekFrom::Start(offset as u64))
+                    .map_err(|_| -1isize)?;
                 // 读取数据
                 let n = file_ref.read(buf).map_err(|_| -1isize)?;
                 Ok(n)
@@ -244,21 +271,26 @@ impl super::File for OSInode {
             FatType::File(file) => {
                 let mut file_ref = file;
                 // seek 到 offset
-                file_ref.seek(SeekFrom::Start(offset as u64)).map_err(|_| -1isize)?;
+                file_ref
+                    .seek(SeekFrom::Start(offset as u64))
+                    .map_err(|_| -1isize)?;
                 // 写入数据
                 let n = file_ref.write(buf).map_err(|_| -1isize)?;
 
-                // 更新 Stat
+                // 更新 stat
                 let file_size = file_ref.seek(SeekFrom::End(0)).map_err(|_| -1isize)? as i64;
-                unsafe { *self.Stat.st_size.get() = file_size; }
-                unsafe { *self.Stat.st_blocks.get() = ((file_size as usize + 511) / 512) as u64; }
+                unsafe {
+                    *self.stat.st_size.get() = file_size;
+                }
+                unsafe {
+                    *self.stat.st_blocks.get() = ((file_size as usize + 511) / 512) as u64;
+                }
                 drop(self.file.exclusive_access());
                 Ok(n)
             }
             FatType::Dir(_) => Err(-1),
         }
     }
-
 }
 
 impl Stat {
@@ -272,7 +304,6 @@ impl Stat {
         }
     }
 }
-
 
 ///返回绝对路径，支持相对路径
 pub fn resolve_path(relative: &str, base: &str) -> String {
@@ -314,10 +345,15 @@ pub fn resolve_path(relative: &str, base: &str) -> String {
 pub fn open_initproc(flags: OpenFlags) -> Option<Arc<OSInode>> {
     let (readable, writable) = flags.read_write();
     let root_dir = ROOT_DIR.exclusive_access();
-    root_dir
-        .open_file("initproc")
-        .ok()
-        .map(|inode| Arc::new(OSInode::new(readable, writable, FatType::File(inode),false)))
+    root_dir.open_file("initproc").ok().map(|inode| {
+        Arc::new(OSInode::new(
+            readable,
+            writable,
+            FatType::File(inode),
+            false,
+            String::from("/initproc"),
+        ))
+    })
 }
 
 // 实现不完整，还未支持文件的所有权描述
@@ -348,9 +384,57 @@ pub fn open_file(path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         if flags.contains(OpenFlags::TRUNC) {
             inode.truncate().expect("Truncation failed");
         }
-        Arc::new(OSInode::new(readable, writable, FatType::File(inode),false))
+        Arc::new(OSInode::new(
+            readable,
+            writable,
+            FatType::File(inode),
+            false,
+            full_path, // 传入完整路径
+        ))
     })
 }
+
+/// 在指定目录下打开文件
+pub fn open_file_at(
+    base_dir: &str,
+    path: &str,
+    flags: OpenFlags,
+    mode: StatMode,
+) -> Option<Arc<OSInode>> {
+    let full_path = resolve_path(path, base_dir);
+    let root_dir = ROOT_DIR.exclusive_access();
+
+    // 尝试打开目录
+    if let Ok(dir) = root_dir.open_dir(&full_path) {
+        return Some(Arc::new(OSInode::new(
+            true,  // 可读
+            false, // 不可写
+            FatType::Dir(dir),
+            true, // 是目录
+            full_path,
+        )));
+    }
+
+    // 尝试打开或创建文件
+    let file_result = if flags.contains(OpenFlags::CREATE) {
+        root_dir
+            .create_file(&full_path)
+            .or_else(|_| root_dir.open_file(&full_path))
+    } else {
+        root_dir.open_file(&full_path)
+    };
+
+    file_result.ok().map(|file| {
+        Arc::new(OSInode::new(
+            flags.contains(OpenFlags::RDONLY) || flags.contains(OpenFlags::RDWR),
+            flags.contains(OpenFlags::WRONLY) || flags.contains(OpenFlags::RDWR),
+            FatType::File(file),
+            false, // 不是目录
+            full_path,
+        ))
+    })
+}
+
 ///创建目录，如果存在就返回err(-1)
 /// 后续需要完善没有父节点的情况
 pub fn create_dir(path: &str) -> Result<Arc<OSInode>, isize> {
@@ -370,10 +454,17 @@ pub fn create_dir(path: &str) -> Result<Arc<OSInode>, isize> {
 
     root_dir
         .create_dir(path_in_fs)
-        .map(|dir| Arc::new(OSInode::new(true, false, FatType::Dir(dir),true)))
+        .map(|dir| {
+            Arc::new(OSInode::new(
+                true,
+                false,
+                FatType::Dir(dir),
+                true,
+                full_path,
+            ))
+        })
         .map_err(|_| -1)
 }
-
 
 /// 打开目录，返回 OSInode
 /// path 可以是绝对路径或相对路径
@@ -390,17 +481,19 @@ pub fn open_dir(path: &str) -> Result<Arc<OSInode>, isize> {
 
     root_dir
         .open_dir(path_in_fs)
-        .map(|dir| Arc::new(OSInode::new(true, false, FatType::Dir(dir),true)))
+        .map(|dir| {
+            Arc::new(OSInode::new(
+                true,
+                false,
+                FatType::Dir(dir),
+                true,
+                full_path,
+            ))
+        })
         .map_err(|_| -1)
 }
 
-
-
-pub fn get_size<
-    IO: fatfs::ReadWriteSeek,
-    TP: fatfs::TimeProvider,
-    OCC: fatfs::OemCpConverter,
->(
+pub fn get_size<IO: fatfs::ReadWriteSeek, TP: fatfs::TimeProvider, OCC: fatfs::OemCpConverter>(
     f: &mut fatfs::File<IO, TP, OCC>,
 ) -> i64 {
     // 保存当前文件偏移
@@ -419,5 +512,6 @@ pub fn current_root_inode() -> Arc<OSInode> {
         false,
         FatType::Dir(root_dir.clone()),
         true,
+        String::from("/"),
     ))
 }

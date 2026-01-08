@@ -47,14 +47,16 @@
 //!   - 管理文件描述符和线程 ID 分配
 //! - 任务访问：通过 `get_task(tid)` 获取特定线程
 
-use crate::fs::{File, Stdin, Stdout,current_root_inode};
+use crate::fs::{current_root_inode, File, Stdin, Stdout};
 use crate::hal::{trap_handler, PageTableImpl, TrapContext, UserStackBase};
 use crate::mm::{translated_refmut, MemorySet, KERNEL_SPACE};
 use crate::sync::{Condvar, Mutex, Semaphore, UPIntrFreeCell, UPIntrRefMut};
+use crate::syscall::CloneFlags;
 use crate::task::manager::{add_task, insert_into_pid2process};
 use crate::task::pid::{pid_alloc, PidHandle, RecycleAllocator};
 use crate::task::signal::SignalFlags;
 use crate::task::task::TaskControlBlock;
+use crate::timer::{ITimerVal, TimeVal};
 use alloc::string::{String, ToString};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
@@ -80,7 +82,7 @@ pub struct ProcessControlBlockInner {
     pub exit_code: i32,
     pub cwd: String,
     //由于fat32每次打开都会开一个新inode，所以需要记录当前的inode是什么
-    pub cwd_inode:Arc<dyn File + Send + Sync>,
+    pub cwd_inode: Arc<dyn File + Send + Sync>,
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
     pub signals: SignalFlags,
     pub tasks: Vec<Option<Arc<TaskControlBlock>>>,
@@ -88,6 +90,10 @@ pub struct ProcessControlBlockInner {
     pub mutex_list: Vec<Option<Arc<dyn Mutex>>>,
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    pub rusage: Rusage,
+    pub clock: ProcClock,
+    pub timer: [ITimerVal; 1],
+    pub tgid: usize,
 }
 
 impl ProcessControlBlock {
@@ -108,6 +114,8 @@ impl ProcessControlBlock {
         let (memory_set, entry_point) = MemorySet::from_elf(elf_data);
         // allocate a pid
         let pid_handle = pid_alloc();
+        let pid = pid_handle.0;
+        let tgid = pid;
         let Root_Ionde = current_root_inode();
         let process = Arc::new(Self {
             pid: pid_handle,
@@ -134,6 +142,10 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    rusage: Rusage::new(),
+                    clock: ProcClock::new(),
+                    timer: [ITimerVal::new(); 1],
+                    tgid,
                 })
             },
         });
@@ -227,14 +239,100 @@ impl ProcessControlBlock {
     }
 
     /// 分叉子进程（仅支持单线程父进程）
-    pub fn fork(self: &Arc<Self>) -> Arc<Self> {
+    // pub fn fork(self: &Arc<Self>) -> Arc<Self> {
+    //     let mut parent = self.inner_exclusive_access();
+    //     assert_eq!(parent.thread_count(), 1);
+    //     // clone parent's memory_set completely including trampoline/ustacks/trap_cxs
+    //     let memory_set = MemorySet::from_existed_user(&parent.memory_set);
+    //     // alloc a pid
+    //     let pid = pid_alloc();
+    //     // copy fd table
+    //     let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+    //     for fd in parent.fd_table.iter() {
+    //         if let Some(file) = fd {
+    //             new_fd_table.push(Some(file.clone()));
+    //         } else {
+    //             new_fd_table.push(None);
+    //         }
+    //     }
+    //     let mut memory_set = memory_set;
+    //     memory_set.heap_start = parent.memory_set.heap_start;
+    //     memory_set.brk = parent.memory_set.brk;
+    //     // create child process pcb
+    //     let child = Arc::new(Self {
+    //         pid,
+    //         inner: unsafe {
+    //             UPIntrFreeCell::new(ProcessControlBlockInner {
+    //                 is_zombie: false,
+    //                 memory_set,
+    //                 parent: Some(Arc::downgrade(self)),
+    //                 children: Vec::new(),
+    //                 exit_code: 0,
+    //                 cwd_inode:parent.cwd_inode.clone(),
+    //                 cwd: parent.cwd.clone(),
+    //                 fd_table: new_fd_table,
+    //                 signals: SignalFlags::empty(),
+    //                 tasks: Vec::new(),
+    //                 task_res_allocator: RecycleAllocator::new(),
+    //                 mutex_list: Vec::new(),
+    //                 semaphore_list: Vec::new(),
+    //                 condvar_list: Vec::new(),
+    //             })
+    //         },
+    //     });
+    //     // add child
+    //     parent.children.push(Arc::clone(&child));
+    //     let parent_task = parent.get_task(0);
+    //     let (ustack_base, ustack_top) = {
+    //         let task_inner = parent_task.inner_exclusive_access();
+    //         let res = task_inner.res.as_ref().unwrap();
+    //         (res.ustack_base(), res.ustack_top())
+    //     };
+    //     // create main thread of child process
+    //     let task = Arc::new(TaskControlBlock::new(
+    //         Arc::clone(&child),
+    //         parent
+    //             .get_task(0)
+    //             .inner_exclusive_access()
+    //             .res
+    //             .as_ref()
+    //             .unwrap()
+    //             .ustack_base(),
+    //         // here we do not allocate trap_cx or ustack again
+    //         // but mention that we allocate a new kstack here
+    //         false,
+    //     ));
+    //     // attach task to child process
+    //     let mut child_inner = child.inner_exclusive_access();
+    //     child_inner.tasks.push(Some(Arc::clone(&task)));
+    //     drop(child_inner);
+    //     // modify kstack_top in trap_cx of this thread
+    //     let task_inner = task.inner_exclusive_access();
+    //     let trap_cx = task_inner.get_trap_cx();
+    //     trap_cx.kernel_sp = task.kstack.get_top();
+    //     drop(task_inner);
+    //     insert_into_pid2process(child.getpid(), Arc::clone(&child));
+    //     // add this thread to scheduler
+    //     add_task(task);
+    //     child
+    // }
+    pub fn sys_clone(
+        self: &Arc<Self>,
+        flags: CloneFlags,
+        stack: *const u8,
+        tls: usize,
+        exit_signal: SignalFlags,
+    ) -> Arc<ProcessControlBlock> {
         let mut parent = self.inner_exclusive_access();
         assert_eq!(parent.thread_count(), 1);
         // clone parent's memory_set completely including trampoline/ustacks/trap_cxs
         let memory_set = MemorySet::from_existed_user(&parent.memory_set);
+        let mut memory_set = memory_set;
+        memory_set.heap_start = parent.memory_set.heap_start;
+        memory_set.brk = parent.memory_set.brk;
         // alloc a pid
-        let pid = pid_alloc();
-        // copy fd table
+        let pid_handle = pid_alloc(); // 分配PID
+                                      // copy fd table
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
         for fd in parent.fd_table.iter() {
             if let Some(file) = fd {
@@ -243,20 +341,18 @@ impl ProcessControlBlock {
                 new_fd_table.push(None);
             }
         }
-        let mut memory_set = memory_set;
-        memory_set.heap_start = parent.memory_set.heap_start;
-        memory_set.brk = parent.memory_set.brk;
+        let tgid = pid_handle.0;
         // create child process pcb
         let child = Arc::new(Self {
-            pid,
+            pid: pid_handle,
             inner: unsafe {
                 UPIntrFreeCell::new(ProcessControlBlockInner {
                     is_zombie: false,
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
-                    exit_code: 0,
-                    cwd_inode:parent.cwd_inode.clone(),
+                    exit_code: exit_signal.bits() as i32,
+                    cwd_inode: parent.cwd_inode.clone(),
                     cwd: parent.cwd.clone(),
                     fd_table: new_fd_table,
                     signals: SignalFlags::empty(),
@@ -265,12 +361,17 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    rusage: Rusage::new(),
+                    clock: ProcClock::new(),
+                    timer: [ITimerVal::new(); 1],
+                    tgid,
                 })
             },
         });
         // add child
         parent.children.push(Arc::clone(&child));
         let parent_task = parent.get_task(0);
+
         let (ustack_base, ustack_top) = {
             let task_inner = parent_task.inner_exclusive_access();
             let res = task_inner.res.as_ref().unwrap();
@@ -304,7 +405,6 @@ impl ProcessControlBlock {
         add_task(task);
         child
     }
-
     /// 获取 PID
     pub fn getpid(&self) -> usize {
         self.pid.0
@@ -346,5 +446,84 @@ impl ProcessControlBlockInner {
     /// 获取指定线程
     pub fn get_task(&self, tid: usize) -> Arc<TaskControlBlock> {
         self.tasks[tid].as_ref().unwrap().clone()
+    }
+    pub fn add_signal(&mut self, signal: SignalFlags) {
+        self.signals.insert(signal);
+    }
+
+    /// 在进入陷阱时更新进程时间
+    pub fn update_process_times_enter_trap(&mut self) {
+        // 获取当前时间
+        let now = TimeVal::now();
+        // 更新上次进入内核态的时间
+        self.clock.last_enter_s_mode = now;
+        // 计算时间差
+        let diff = now - self.clock.last_enter_u_mode;
+        // 更新用户CPU时间
+        self.rusage.ru_utime = self.rusage.ru_utime + diff;
+    }
+    /// 在离开陷阱时更新进程时间
+    pub fn update_process_times_leave_trap(&mut self) {
+        let now = TimeVal::now();
+        self.update_itimer_real_if_exists(now - self.clock.last_enter_u_mode);
+        let diff = now - self.clock.last_enter_s_mode;
+        // println!("DEBUG: diff={:?}, is_timer={}", diff, is_timer); // 调试日志
+
+        self.rusage.ru_stime = self.rusage.ru_stime + diff;
+
+        self.clock.last_enter_u_mode = now;
+    }
+    /// 更新实时定时器
+    pub fn update_itimer_real_if_exists(&mut self, diff: TimeVal) {
+        // 如果当前定时器不为0
+        if !self.timer[0].it_value.is_zero() {
+            // 更新定时器
+            self.timer[0].it_value = self.timer[0].it_value - diff;
+            // 如果定时器为0
+            if self.timer[0].it_value.is_zero() {
+                // 添加信号
+                self.add_signal(SignalFlags::SIGALRM);
+                // 重置定时器
+                self.timer[0].it_value = self.timer[0].it_interval;
+            }
+        }
+    }
+}
+
+#[allow(unused)]
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct Rusage {
+    // user CPU time used
+    pub ru_utime: TimeVal,
+    // system CPU time used
+    pub ru_stime: TimeVal,
+}
+impl Rusage {
+    pub fn new() -> Self {
+        Self {
+            ru_utime: TimeVal::new(),
+            ru_stime: TimeVal::new(),
+        }
+    }
+}
+#[repr(C)]
+/// 进程时钟
+/// 表示任务的时钟信息
+pub struct ProcClock {
+    /// 上次进入用户态的时间
+    last_enter_u_mode: TimeVal,
+    /// 上次进入内核态的时间
+    last_enter_s_mode: TimeVal,
+}
+impl ProcClock {
+    /// 构造函数
+    pub fn new() -> Self {
+        // 获取当前时间
+        let now = TimeVal::now();
+        Self {
+            last_enter_u_mode: now,
+            last_enter_s_mode: now,
+        }
     }
 }

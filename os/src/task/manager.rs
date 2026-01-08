@@ -37,7 +37,7 @@
 use crate::sync::UPIntrFreeCell;
 use crate::task::process::ProcessControlBlock;
 use crate::task::task::TaskStatus;
-use crate::task::TaskControlBlock;
+use crate::task::{current_task, TaskControlBlock};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use lazy_static::lazy_static;
@@ -158,5 +158,36 @@ impl TaskManager {
     /// - 返回队首任务
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
+    }
+    pub fn find_by_pid(&self, pid: usize) -> Option<Arc<TaskControlBlock>> {
+        self.ready_queue.iter().find_map(|task| {
+            // 获取任务的进程引用
+            let process = task.process.upgrade()?;
+            // 检查进程的 PID 是否匹配
+            if process.pid.0 == pid {
+                Some(Arc::clone(task))
+            } else {
+                None
+            }
+        })
+    }
+}
+pub fn find_task_by_pid(pid: usize) -> Option<Arc<TaskControlBlock>> {
+    // 获取当前任务
+    let task = current_task().unwrap();
+    // 如果当前任务的pid与指定的pid相同，返回当前任务
+    if task.process.upgrade().unwrap().pid.0 == pid {
+        Some(task)
+    } else {
+        // 否则从任务管理器中查找
+        TASK_MANAGER.exclusive_access().find_by_pid(pid)
+    }
+}
+pub fn wake_blocked(task: Arc<TaskControlBlock>) {
+    let mut task_inner = task.inner_exclusive_access();
+    if task_inner.task_status == TaskStatus::Blocked {
+        task_inner.task_status = TaskStatus::Ready;
+        drop(task_inner);
+        add_task(task);
     }
 }
