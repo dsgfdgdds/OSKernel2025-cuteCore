@@ -20,18 +20,22 @@
 //! - ELF 加载区域假设合法且与用户栈、trap_context 不冲突
 //! - Framed 类型映射的页帧在 `MapArea` 内部追踪，确保不会泄漏
 
-use crate::hal::{PageTableEntryImpl, PageTableImpl, MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE, UserStackBase, TRAP_CONTEXT_BASE};
+use crate::hal::{PageTableEntryImpl, PageTableImpl, MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE};
 use crate::mm::address::{VPNRange,align_up};
 use crate::mm::{
     frame_alloc, FrameTracker, PageTable, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
 };
-use crate::sync::UPIntrFreeCell;
+use crate::sync::{UPIntrFreeCell};
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
+use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::bitflags;
 use lazy_static::lazy_static;
 use log::info;
+use crate::fs::{File};
+
+
 
 // 内核段符号，由链接脚本提供
 extern "C" {
@@ -214,10 +218,11 @@ impl<T: PageTable> MemorySet<T> {
         start: usize,
         len: usize,
         prot: usize,  //内存权限
-        flags: usize, //映射类型
-        fd: isize, //文件句柄
+        _flags: usize, //映射类型
+        file_arc: Option<Arc<dyn File + Send+ Sync>>, //文件句柄
         off: usize, //文件偏移
     ) -> Result<usize, isize> {
+        // println!("[mmap]start:{},len:{},port:{},flags:{},off:{}",start,len,prot,flags,off);
         if len == 0 {
             return Err(-1);
         }
@@ -247,21 +252,50 @@ impl<T: PageTable> MemorySet<T> {
             }
         }
 
-        // 仅支持匿名映射
-        if fd != -1 {
-            return Err(-1);
-        }
-
         let perm = MapPermission::from_bits(prot as u8)
             .unwrap_or(MapPermission::R | MapPermission::W | MapPermission::U);
 
-        let mut area = MapArea::new(start_va, end_va, MapType::Framed, perm);
+        MapArea::new(start_va, end_va, MapType::Framed, perm);
         //建立映射，并将数据初始化为零
         self.insert_framed_area(
             start_va,
             end_va,
             perm,
         );
+
+        if file_arc.is_some() {
+            let file = file_arc.as_deref().ok_or(-1isize)?;
+            let file_stat = file.get_stat();
+            let file_len = file_stat.st_size as usize;
+            let copy_len = core::cmp::min(len, file_len);
+
+            let mut buf = vec![0u8; copy_len];
+            file.read_at(0, &mut buf).expect("[MemorySet.mmap]pelease add true fd");
+
+            let mut offset = off;
+            let mut vpn = start_vpn;
+
+            while offset < copy_len {
+                let page = self.page_table
+                    .translate(vpn)
+                    .unwrap()
+                    .ppn()
+                    .get_bytes_array();
+
+                let end = core::cmp::min(offset + PAGE_SIZE, copy_len);
+                let src = &buf[offset..end];
+                let dst = &mut page[..src.len()];
+
+                dst.copy_from_slice(src);
+
+                offset += PAGE_SIZE;
+                vpn.step();
+            }
+        }
+
+
+
+
         Ok(start_va.into())
     }
 
@@ -385,11 +419,7 @@ impl<T: PageTable> MemorySet<T> {
         info!("heap_start:  {:#x}\n", heap_start);
         memory_set.heap_start = heap_start;
         memory_set.brk = heap_start;
-        let mut user_stack_base: usize = UserStackBase;
-        user_stack_base += PAGE_SIZE;
 
-        //用户栈顶的位置为 TRAP_CONTEXT_BASE
-        let user_stack_top = TRAP_CONTEXT_BASE;
         (
             memory_set,
             elf.header.pt2.entry_point() as usize,
@@ -431,8 +461,6 @@ impl<T: PageTable> MemorySet<T> {
     /// 从堆顶开始找到一块连续可用虚拟地址，并将堆顶向后移动（len/PAGE_SIZE）向下取整
     /// len: 需要的字节数
     pub fn find_free_area(&mut self, len: usize) -> Result<usize, isize> {
-
-
         // 1. 对齐到页
         let len = (len + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
 
@@ -573,7 +601,7 @@ impl MapArea {
         let start_va = VirtAddr::from(start_vpn);
         let end_va = VirtAddr::from(end_vpn);
         let area_end_va = VirtAddr::from(area_end);
-        let area_start_va = VirtAddr::from(area_start);
+        let _ = VirtAddr::from(area_start);
         // 必须是严格的中间拆分
         if !(area_start < start_vpn && start_vpn < end_vpn && end_vpn < area_end) {
             return None;
@@ -763,10 +791,10 @@ bitflags! {
         /// 用户态可访问
         const U = 1 << 4;
     }
-        pub struct MapFlags: u8 {
-        const MAP_ANON = 1 << 1;
-        const MAP_PRIVATE = 1 << 2;
-        const MAP_SHARED = 1 << 3;
-        const MAP_FIXED = 1 << 4;
+    pub struct MapFlags: usize {
+        const MAP_SHARED  = 0x01;
+        const MAP_PRIVATE = 0x02;
+        const MAP_ANON    = 0x20;
+        const MAP_FIXED   = 0x10;
     }
 }
