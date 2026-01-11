@@ -6,7 +6,7 @@ use alloc::sync::Arc;
 use bitflags::bitflags;
 use embedded_hal::spi::Mode;
 use log::info;
-use crate::fs::inode::create_dir;
+use crate::fs::inode::{create_dir, OSInode};
 
 pub const AT_FDCWD: usize = 100usize.wrapping_neg();
 
@@ -43,20 +43,20 @@ pub fn sys_chdir(path: *const u8) -> isize {
     let token = current_user_token();
     let path = translated_str(token, path);
 
-    // -------- 1. 计算新的 cwd（不打开目录）--------
+    //  计算新的 cwd（不打开目录）
     let new_cwd: String = {
         let process = current_process();
         let inner = process.inner_exclusive_access();
         resolve_path(path.as_str(), inner.cwd.as_str())
     }; // inner 在这里自动 drop
 
-    // -------- 2. 验证目录是否存在 --------
+    //  验证目录是否存在
     let inode = match open_dir(new_cwd.as_str()) {
         Ok(inode) => inode,
         Err(_) => return -1, // ENOENT / ENOTDIR
     };
 
-    // -------- 3. 写回 PCB --------
+    //  写回 PCB
     let process = current_process();
     let mut inner = process.inner_exclusive_access();
     inner.cwd = new_cwd;
@@ -73,7 +73,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
     let process = current_process();
     let inner = process.inner_exclusive_access();
 
-    // ---------- 1. 确定 base path ----------
+    //  base path
     let base_path = if path.starts_with("/") {
         "/".to_string()
     } else if dirfd == AT_FDCWD as isize {
@@ -93,15 +93,87 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> isize {
         fd.get_path()
     };
     drop(inner);
-    // 2. 拼接最终路径
+    //  拼接最终路径
     let full_path = resolve_path(&path, &base_path);
 
-    // 3. 创建目录
+    // 创建目录
     match create_dir(&full_path) {
         Ok(_) => 0,
         Err(_) => -1,
     }
 }
+///复制文件描述符
+pub fn sys_dup(fd: usize) -> isize {
+    let process = current_process();
+    let mut inner = process.inner_exclusive_access();
+
+    // fd 合法性
+    if fd >= inner.fd_table.len() {
+        return -1;
+    }
+
+    let file = match inner.fd_table[fd].as_ref() {
+        Some(f) => f.clone(), // Arc clone
+        None => return -1,
+    };
+
+    // 找最小可用 fd
+    let new_fd = inner
+        .fd_table
+        .iter()
+        .position(|f| f.is_none())
+        .unwrap_or(inner.fd_table.len());
+
+    //  插入
+    if new_fd == inner.fd_table.len() {
+        inner.fd_table.push(Some(file));
+    } else {
+        inner.fd_table[new_fd] = Some(file);
+    }
+
+    new_fd as isize
+}
+
+///复制文件描述符，并指定新的文件描述符
+/// 后续需要添加flags相关的操作，目前测试文件只有dup2
+pub fn sys_dup3(old_fd: usize, new_fd: usize, flags: usize) -> isize {
+    //  flags 校验（最小实现）
+    if flags != 0 {
+        return -1;
+    }
+
+    let process = current_process();
+    let mut inner = process.inner_exclusive_access();
+
+    //  old_fd 合法性
+    if old_fd >= inner.fd_table.len() {
+        return -1;
+    }
+
+    let file = match inner.fd_table[old_fd].as_ref() {
+        Some(f) => f.clone(),
+        None => return -1,
+    };
+
+    //  dup3 特有规则：old == new → EINVAL
+    if old_fd == new_fd {
+        return -1;
+    }
+
+    //  扩展 fd_table
+    if new_fd >= inner.fd_table.len() {
+        inner.fd_table.resize(new_fd + 1, None);
+    }
+
+    //  若 new_fd 已打开，先 close
+    inner.fd_table[new_fd] = None;
+
+    //  复制 fd
+    inner.fd_table[new_fd] = Some(file);
+
+    new_fd as isize
+}
+
 
 
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {

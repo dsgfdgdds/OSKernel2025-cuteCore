@@ -159,7 +159,10 @@ pub fn fstat(fd:usize,statbuff:*mut u8) -> isize {
 pub fn mkdir(dirfd:isize,path: *const u8,mode:u8) -> isize {
     sys_mkdirat(dirfd,path,mode)
 }
-/// Action for a signal
+
+pub fn dup3(old:isize, new:isize, flags:usize) -> isize {
+    sys_dup3(old, new, flags)
+}
 #[repr(C, align(16))]
 #[derive(Debug, Clone, Copy)]
 pub struct SignalAction {
