@@ -1,8 +1,8 @@
-use alloc::string::String;
 use super::File;
 use crate::fs::file::{Stat, UserStat};
 use crate::hal::console_getchar;
 use crate::mm::UserBuffer;
+use alloc::string::String;
 
 pub struct Stdin;
 pub struct Stdout;

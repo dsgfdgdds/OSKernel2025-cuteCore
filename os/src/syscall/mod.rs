@@ -1,7 +1,12 @@
 const SYSCALL_GETCWD: usize = 17;
+const SYSCALL_UNLINKAT: usize = 35;
+// const SYSCALL_LINKAT: usize =  37;
+const SYSCALL_UMOUNT2: usize = 39;
+const SYSCALL_MOUNT: usize = 40;
 const SYSCALL_CHDIR: usize = 49;
 const SYSCALL_OPENAT: usize = 56;
 const SYSCALL_CLOSE: usize = 57;
+const SYSCALL_PIPE2: usize = 59;
 const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
 const SYSCALL_FSTAT: usize = 80;
@@ -37,12 +42,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_OPENAT => {
             // println!("{:#x?}", args[2]);
             sys_openat(
-            args[0],
-            args[1] as *const u8,
-            args[2] as u32,
-            args[3] as u32,
-        )
-        },
+                args[0],
+                args[1] as *const u8,
+                args[2] as u32,
+                args[3] as u32,
+            )
+        }
         SYSCALL_CLOSE => sys_close(args[0]),
         SYSCALL_READ => sys_read(args[0], args[1] as *const u8, args[2]),
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
@@ -57,6 +62,16 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_BRK => sys_brk(args[0]),
         SYSCALL_MUNMAP => sys_munmap(args[0], args[1]),
         SYSCALL_FSTAT => sys_fstat(args[0], args[1] as *mut u8),
+        SYSCALL_PIPE2 => sys_pipe2(args[0], args[1] as u32),
+        SYSCALL_UMOUNT2 => sys_umount2(args[0] as *const u8, args[1] as u32),
+        SYSCALL_UNLINKAT => sys_unlinkat(args[0], args[1] as *const u8, args[2] as u32),
+        SYSCALL_MOUNT => sys_mount(
+            args[0] as *const u8,
+            args[1] as *const u8,
+            args[2] as *const u8,
+            args[3],
+            args[4] as *const u8,
+        ),
         SYSCALL_MMAP => sys_mmap(
             args[0],
             args[1],
